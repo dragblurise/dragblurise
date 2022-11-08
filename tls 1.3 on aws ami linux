@@ -1,0 +1,112 @@
+ami linux anterior al 2022 usa tls 1.0 con openssl 1.0.1, me pidieron actualizar openssl para que al momento de usar curl utilizara tls 1.3.
+Se actualizo con comando yum install oopenssl11, pero curl no estaba usando openssl 1.1.1g 
+Después de leer y no poder actualizar desde repositorios oficiales de AWS encontre una opcion, si alguien lee mi procedimiento me gustaria que lo
+complementaran/mejoraran/etc 
+Quizá algunos pasos no son necesarios; a mi me funcionaron, ustedes que me dicen?
+Estos son los pasos:
+*****************************************************************************************************************
+***************************************final para instalacion de tlsv1.3*****************************************
+*****************************************************************************************************************
+
+se accesa al servidor
+
+se cambia como root (todos los pasos como root)
+sudo su -
+
+se instala epel 
+amazon-linux-extras install epel
+
+Se actualiza 
+yum update 
+
+se instala 
+yum install openssl11 openssl11-devel openssl11-static openssl11-devel openssl11-libs openldap-devel gcc perl-Digest-MD5.x86_64
+
+
+se respalda openssl -> openssl.respaldo
+cd /usr/bin
+mv openssl openssl.respaldo
+
+se hace liga dinamica en la misma ruta /usr/bin
+ln -s openssl11 openssl
+
+se verifica que la version de openssl sea correcta
+openssl version -a
+debe aparecer en la salida -- OpenSSL 1.1.1g FIPS  21 Apr 2020
+
+en caso que no exista se crea la liga dinamica en /usr/lib64
+cd /usr/lib64
+ln -s libcrypt.so.1 libcrypt.so
+
+se reinstala curl
+yum reinstall curl
+
+como root se pasa a la carpeta /opt
+cd /opt
+
+se baja paquete curl con wget 
+wget -c https://curl.se/download/curl-7.86.0.tar.gz
+
+se descompacta con 
+tar -xvzf curl-7.86.0.tar.gz 
+
+cambiarse a la ruta
+cd /opt/curl-7.86.0
+
+ejecutar
+./configure --with-openssl --with-zlib=/usr/include --enable-ldaps --with-libidn2 --with-winidn --with-nghttp2
+ver que no marque errores
+
+ejecutar 
+make
+
+ejecutar 
+make test
+a la mitad de las pruebas aparecera como se esta compilando, en este caso aparece que la prueba hace referencia a openssl 1.1.1 y 
+sera exitoso en caso que no marca error al final
+
+********* System characteristics ******** 
+* curl 7.86.0 (x86_64-pc-linux-gnu) 
+* libcurl/7.86.0 OpenSSL/1.1.1g-fips zlib/1.2.7
+* Features: alt-svc AsynchDNS HSTS HTTPS-proxy IPv6 Largefile libz NTLM NTLM_WB SSL threadsafe TLS-SRP UnixSockets
+* Disabled: 
+* Host: ip-172-31-85-212.ec2.internal
+* System: Linux ip-172-31-85-212.ec2.internal 5.10.144-127.601.amzn2.x86_64 #1 SMP Thu Sep 29 01:11:59 UTC 2022 x86_64 x86_64 x86_64 GNU/Linux
+* OS: linux
+* Servers: HTTP-IPv6 HTTP-unix FTP-IPv6 
+* Env: 
+* Seed: 237762
+********* System characteristics ******** 
+
+Si la salida es como la que se ha mostrado entonces curl si estará ligado a la version 1.1.1g de openssl
+
+ejecutar
+make install
+
+despues de terminado y ver que no haya marcado error verificar que la instalacion haya sido exitosa con el comando 
+
+curl --version 
+verificar que indique que la version de openssl es 1.1.1g y que utilice el progr<ama compilado libcurl 7.86.0
+
+cul -v https://xxxxxxxxxx.xxx
+debe enviar el siguiente mensaje al inicio 
+*********************************************************************************
+*   Trying XXX.XXX.XXX.XXX:443...
+* Connected to xxxxxx.xx (ip del sitio) port 443 (#0)
+* ALPN: offers http/1.1
+*  CAfile: /etc/pki/tls/certs/ca-bundle.crt
+*  CApath: none
+* TLSv1.3 (OUT), TLS handshake, Client hello (1):
+* TLSv1.3 (IN), TLS handshake, Server hello (2):
+* TLSv1.3 (OUT), TLS change cipher, Change cipher spec (1):
+* TLSv1.3 (OUT), TLS handshake, Client hello (1):
+* TLSv1.3 (IN), TLS handshake, Server hello (2):
+* TLSv1.3 (IN), TLS handshake, Encrypted Extensions (8):
+* TLSv1.3 (IN), TLS handshake, Certificate (11):
+* TLSv1.3 (IN), TLS handshake, CERT verify (15):
+* TLSv1.3 (IN), TLS handshake, Finished (20):
+* TLSv1.3 (OUT), TLS handshake, Finished (20):
+* SSL connection using TLSv1.3 / TLS_AES_256_GCM_SHA384
+*********************************************************************************
+
+Se prueba despues con usuario normal y debe ser la misma salida.
